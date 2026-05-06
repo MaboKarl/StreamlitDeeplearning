@@ -2,7 +2,11 @@ import av
 import cv2
 import streamlit as st
 from ultralytics import YOLO
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
+import logging
+
+# Suppress verbose logging
+logging.getLogger("streamlit_webrtc").setLevel(logging.ERROR)
 
 MODEL_PATH = "my_model.pt"
 CONF_THRESHOLD = 0.50
@@ -81,10 +85,19 @@ class GestureDetector(VideoProcessorBase):
 
         return av.VideoFrame.from_ndarray(annotated, format="bgr24")
 
-# Webcam feed - reduced size
+# RTC Configuration with better server support
+rtc_configuration = RTCConfiguration(
+    {"iceServers": [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        {"urls": ["stun:stun1.l.google.com:19302"]},
+    ]}
+)
+
+# Webcam feed
 col1, col2 = st.columns([1, 1])
 
 with col1:
+    st.subheader("Live Gesture Detection")
     webrtc_streamer(
         key="gesture-detection",
         video_processor_factory=GestureDetector,
@@ -95,6 +108,12 @@ with col1:
             },
             "audio": False
         },
-        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+        rtc_configuration=rtc_configuration,
         async_processing=True,
     )
+
+with col2:
+    st.subheader("Actions")
+    st.info("Point your hand at the camera and make gestures!")
+    for gesture, action in ACTION_MAP.items():
+        st.write(f"**{gesture.title()}** → {action}")
