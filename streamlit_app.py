@@ -93,17 +93,19 @@ rtc_configuration = RTCConfiguration(
     ]}
 )
 
-# Webcam feed
-webrtc_streamer(
-    key="gesture-detection",
-    video_processor_factory=GestureDetector,
-    media_stream_constraints={
-        "video": {
-            "width": {"ideal": 640},
-            "height": {"ideal": 480}
+# Webcam feed - smaller size
+col = st.columns([1])[0]
+with col:
+    webrtc_streamer(
+        key="gesture-detection",
+        video_processor_factory=GestureDetector,
+        media_stream_constraints={
+            "video": {
+                "width": {"ideal": 320},
+                "height": {"ideal": 240}
+            },
+            "audio": False
         },
-        "audio": False
-    },
-    rtc_configuration=rtc_configuration,
-    async_processing=True,
-)
+        rtc_configuration=rtc_configuration,
+        async_processing=True,
+    )
