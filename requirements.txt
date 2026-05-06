@@ -1,10 +1,9 @@
 streamlit==1.40.2
+streamlit-webrtc==0.48.1
 ultralytics
-opencv-python-headless
+opencv-python
 pillow
-streamlit-webrtc==0.47.9
 av
 torch
 torchvision
 numpy
-tornado
