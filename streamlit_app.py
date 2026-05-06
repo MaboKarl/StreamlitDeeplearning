@@ -55,32 +55,32 @@ class GestureDetector(VideoProcessorBase):
             cv2.putText(
                 annotated,
                 f"Gesture: {label} ({conf:.2f})",
-                (10, 30),
+                (10, 20),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
+                0.4,
                 (0, 255, 0),
-                2
+                1
             )
 
             cv2.putText(
                 annotated,
-                f"Simulated Action: {action}",
-                (10, 65),
+                f"Action: {action}",
+                (10, 35),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
+                0.35,
                 (255, 255, 0),
-                2
+                1
             )
 
         else:
             cv2.putText(
                 annotated,
-                "No gesture detected",
-                (10, 30),
+                "No gesture",
+                (10, 20),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
+                0.4,
                 (0, 0, 255),
-                2
+                1
             )
 
         return av.VideoFrame.from_ndarray(annotated, format="bgr24")
