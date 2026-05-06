@@ -93,16 +93,16 @@ rtc_configuration = RTCConfiguration(
     ]}
 )
 
-# Webcam feed - smaller size
-col = st.columns([1])[0]
+# Webcam feed - very small
+col = st.columns([0.4])[0]
 with col:
     webrtc_streamer(
         key="gesture-detection",
         video_processor_factory=GestureDetector,
         media_stream_constraints={
             "video": {
-                "width": {"ideal": 320},
-                "height": {"ideal": 240}
+                "width": {"ideal": 280},
+                "height": {"ideal": 210}
             },
             "audio": False
         },
