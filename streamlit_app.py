@@ -8,7 +8,7 @@ import logging
 # Suppress verbose logging
 logging.getLogger("streamlit_webrtc").setLevel(logging.ERROR)
 
-MODEL_PATH = "my_model.pt"
+MODEL_PATH = "jamod.pt"
 CONF_THRESHOLD = 0.50
 YOLO_IMGSZ = 320
 
