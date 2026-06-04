@@ -4,6 +4,8 @@ import streamlit as st
 from ultralytics import YOLO
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 import logging
+import urllib.request
+import json
 
 # Suppress verbose logging
 logging.getLogger("streamlit_webrtc").setLevel(logging.ERROR)
@@ -26,7 +28,7 @@ ACTION_MAP = {
 st.set_page_config(page_title="Gesture Recognition Web App", layout="wide")
 st.title("🖐️ Gesture Recognition Web App")
 
-# ── Sidebar info ──────────────────────────────────────────────────────────────
+# ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Gesture Actions")
     for gesture, action in ACTION_MAP.items():
@@ -34,14 +36,57 @@ with st.sidebar:
     st.markdown("---")
     st.caption("Confidence threshold: 0.50")
 
-# ── Load model ────────────────────────────────────────────────────────────────
+# ── Load model ─────────────────────────────────────────────────────────────────
 @st.cache_resource
 def load_model():
     return YOLO(MODEL_PATH)
 
 model = load_model()
 
-# ── Video Processor ───────────────────────────────────────────────────────────
+# ── ICE Servers (multiple fallbacks for Streamlit Cloud) ──────────────────────
+@st.cache_data(ttl=3600)
+def get_ice_servers():
+    """
+    Returns a list of ICE servers.
+    Tries multiple free TURN providers with fallback to STUN-only.
+    For production, replace with your own Metered.ca or Twilio TURN credentials.
+    """
+    return [
+        # Google STUN
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        {"urls": ["stun:stun1.l.google.com:19302"]},
+        {"urls": ["stun:stun2.l.google.com:19302"]},
+        {"urls": ["stun:stun3.l.google.com:19302"]},
+        # Cloudflare STUN
+        {"urls": ["stun:stun.cloudflare.com:3478"]},
+        # Free TURN - openrelay (UDP + TCP + TLS)
+        {
+            "urls": [
+                "turn:openrelay.metered.ca:80",
+                "turn:openrelay.metered.ca:80?transport=tcp",
+            ],
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
+        {
+            "urls": [
+                "turn:openrelay.metered.ca:443",
+                "turn:openrelay.metered.ca:443?transport=tcp",
+            ],
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
+        # Backup TURN
+        {
+            "urls": ["turn:relay.webwormhole.io:443?transport=tcp"],
+            "username": "user",
+            "credential": "pass",
+        },
+    ]
+
+rtc_configuration = RTCConfiguration({"iceServers": get_ice_servers()})
+
+# ── Video Processor ────────────────────────────────────────────────────────────
 class GestureDetector(VideoProcessorBase):
     def recv(self, frame):
         try:
@@ -67,7 +112,7 @@ class GestureDetector(VideoProcessorBase):
                 cv2.putText(
                     annotated,
                     f"Gesture: {label} ({conf:.2f})",
-                    (10, 20),
+                    (10, 25),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.5,
                     (0, 255, 0),
@@ -77,7 +122,7 @@ class GestureDetector(VideoProcessorBase):
                 cv2.putText(
                     annotated,
                     f"Action: {action}",
-                    (10, 40),
+                    (10, 48),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.45,
                     (255, 255, 0),
@@ -88,7 +133,7 @@ class GestureDetector(VideoProcessorBase):
                 cv2.putText(
                     annotated,
                     "No gesture detected",
-                    (10, 20),
+                    (10, 25),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.5,
                     (0, 0, 255),
@@ -99,44 +144,18 @@ class GestureDetector(VideoProcessorBase):
             return av.VideoFrame.from_ndarray(annotated, format="bgr24")
 
         except Exception as e:
-            # On error, return the original frame unmodified so stream doesn't crash
+            # Return original frame unmodified so stream doesn't crash
             img = frame.to_ndarray(format="bgr24")
             cv2.putText(
                 img,
-                f"Error: {str(e)[:40]}",
-                (10, 20),
+                f"Error: {str(e)[:50]}",
+                (10, 25),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.4,
                 (0, 0, 255),
                 1
             )
             return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-# ── RTC Configuration (STUN + TURN for reliable connections) ──────────────────
-rtc_configuration = RTCConfiguration(
-    {"iceServers": [
-        # Google STUN servers
-        {"urls": ["stun:stun.l.google.com:19302"]},
-        {"urls": ["stun:stun1.l.google.com:19302"]},
-        {"urls": ["stun:stun2.l.google.com:19302"]},
-        # Free TURN server (helps behind NAT/firewalls)
-        {
-            "urls": ["turn:openrelay.metered.ca:80"],
-            "username": "openrelayproject",
-            "credential": "openrelayproject"
-        },
-        {
-            "urls": ["turn:openrelay.metered.ca:443"],
-            "username": "openrelayproject",
-            "credential": "openrelayproject"
-        },
-        {
-            "urls": ["turn:openrelay.metered.ca:443?transport=tcp"],
-            "username": "openrelayproject",
-            "credential": "openrelayproject"
-        },
-    ]}
-)
 
 # ── Compact camera style ───────────────────────────────────────────────────────
 st.markdown(
@@ -152,17 +171,17 @@ st.markdown(
 )
 
 # ── Instructions ───────────────────────────────────────────────────────────────
-st.info("📷 Click **START** below, then allow camera access when your browser asks.")
+st.info("📷 Click **START** and allow camera access. If it stops, wait 3 seconds and click START again.")
 
 # ── WebRTC Streamer ────────────────────────────────────────────────────────────
-webrtc_streamer(
+ctx = webrtc_streamer(
     key="gesture-detection",
     video_processor_factory=GestureDetector,
     media_stream_constraints={
         "video": {
             "width": {"ideal": 320, "max": 640},
             "height": {"ideal": 240, "max": 480},
-            "frameRate": {"ideal": 15, "max": 30}
+            "frameRate": {"ideal": 15, "max": 24}
         },
         "audio": False
     },
@@ -170,6 +189,12 @@ webrtc_streamer(
     async_processing=True,
 )
 
+# ── Connection status ──────────────────────────────────────────────────────────
+if ctx and ctx.state.playing:
+    st.success("✅ Camera connected and running!")
+elif ctx:
+    st.warning("⏳ Connecting... if it stops, click START again.")
+
 # ── Footer ─────────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.caption("Make sure you're on **HTTPS** or **localhost** for camera access to work.")
+st.caption("Deployed on Streamlit Cloud · Camera requires HTTPS (enabled by default on Streamlit Cloud)")
